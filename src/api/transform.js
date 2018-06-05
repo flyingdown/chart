@@ -8,8 +8,8 @@ export const getTransform = params => {
     if ('id' in params) {
         return axios.get(`${host}/transform/` + params.id)
     } else if ('ordering' in params) {
-        return axios.get(`${host}/transformlist/?ordering=` + params.ordering)
+        return axios.get(`${host}/transform/?ordering=` + params.ordering)
     } else {
-        return axios.get(`${host}/transformlist/`, params)
+        return axios.get(`${host}/transform/`, params)
     }
 }
