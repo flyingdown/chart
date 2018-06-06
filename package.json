@@ -10,6 +10,7 @@
     "build": "node build/build.js"
   },
   "dependencies": {
+    "element-ui": "^2.4.0",
     "highcharts": "^6.1.0",
     "vue": "^2.5.2",
     "vue2-highcharts": "^1.2.3"

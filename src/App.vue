@@ -9,6 +9,20 @@
     </div>
     <vue-highcharts :options="options" ref="splineCharts" :highcharts="Highcharts"></vue-highcharts>
     <button @click="chartPrint">打印图表</button>
+    <div>
+        <el-table ref="singleTable" :data="tableData" style="width: 67%" height="250" stripe highlight-current-row @current-change="handleCurrentChange">
+            <el-table-column fixed align="center" prop="id" label="id" width="60"></el-table-column>
+            <el-table-column prop="datetime" align="center" label="日期时间" width="250">
+                <template slot-scope="scope">
+                    <i class="el-icon-time"></i>
+                    <span style="margin-left: 10px">{{ scope.row.datetime }}</span>
+                </template>
+            </el-table-column>
+            <el-table-column prop="number_7ha" align="center" label="A相电流" width="120"></el-table-column>
+            <el-table-column prop="number_7hb" align="center" label="B相电流" width="120"></el-table-column>
+            <el-table-column prop="number_7hc" align="center" label="C相电流" width="120"></el-table-column>
+        </el-table>
+    </div>
   </div>
 </template>
 
@@ -20,7 +34,13 @@ import selection from './components/selection'
 import exporting from 'highcharts/modules/exporting'
 import Highcharts from 'highcharts'
 
-Exporting(Highcharts)
+Highcharts.setOptions({
+    global: {
+        useUTC: false
+    }
+})
+
+exporting(Highcharts)
 
 export default {
     name: 'App',
@@ -33,6 +53,7 @@ export default {
         return{
             Highcharts,
             handle: null,
+            tableData: [],
             colors: {
                 'a': '#7cb5ec',
                 'b': '#434348',
@@ -110,6 +131,12 @@ export default {
         }
     },
     methods: {
+        setCurrent (row) {
+            this.$refs.singleTable.setCurrentRow(row)
+        },
+        handleCurrentChange (val) {
+            setTimeout(this.setCurrent, 1000)
+        },
         chartPrint () {
             this.$refs.splineCharts.getChart().print()
         },
@@ -142,6 +169,10 @@ export default {
                     y = [],
                     flag = false
 
+                // 更新table数据
+                this.tableData.unshift(value.data)
+                this.tableData.pop()
+
                 y['a'] = value['data']['number_' + label + 'ha']
                 y['b'] = value['data']['number_' + label + 'hb']
                 y['c'] = value['data']['number_' + label + 'hc']
@@ -155,8 +186,9 @@ export default {
                     }
                     series[i].addPoint([x, y[value[i]]], true, flag)
                 }
-                console.log(series)
-                this.activeLastPointToolip(chart);
+                // console.log(series)
+                this.activeLastPointToolip(chart)
+                this.setCurrent(this.tableData[0])
                 index++
                 // console.log(chart)
                 this.handle = setTimeout(this.addLastPoint, interval, chart, index)
@@ -182,7 +214,9 @@ export default {
                 let aData = [],
                     bData = [],
                     cData = [],
-                    results = value['data']['results'],
+                    results = value['data']['results']
+                this.tableData = results
+                // console.log(this.tableData)
                 index = results[0]['id']
                 for (let i in results) {
                     let label = this.transformInfo.label,
@@ -227,18 +261,14 @@ export default {
                 // console.log(chart.series)
                 chart.redraw()
                 this.activeLastPointToolip(chart)
-                this.addLastPoint(chart, index)
+                // this.addLastPoint(chart, index+1)
+                setTimeout(this.addLastPoint, 1000 * 60, chart, index+1)
             }).catch((err) => {
                 console.log(err)
             })
         }
     },
     mounted () {
-        Highcharts.setOptions({
-            global: {
-                useUTC: false
-            }
-        })
 
         this.load()
     }
