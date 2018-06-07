@@ -1,16 +1,38 @@
 <template>
   <div id="app">
     <img src="./assets/logo.png">
-    <div>
-        <selection :selections='selectionList' @onChange="onParamChange('label', $event)"></selection>
-    </div>
-    <div>
-        <check-box :selections='checkList' @onChange="onParamChange('value', $event)"></check-box>
-    </div>
+    <el-row>
+        <el-col :span="12">
+            <div>
+                <div>
+                    <selection :selections='selectionList' @onChange="onParamChange('label', $event)"></selection>
+                </div>
+                <div>
+                    <check-box :selections='checkList' @onChange="onParamChange('value', $event)"></check-box>
+                </div>
+            </div>
+        </el-col>
+        <el-col :span="12">
+            <el-row>
+                <el-col :span="6">
+                    <div class="my-witch">
+                        <el-switch v-model="switchValue" active-color="#13ce66" inactive-color="#ff4949" @change="switchChange"></el-switch>
+                    </div>
+                </el-col>
+                <el-col :span="18">
+                    <div>
+                        <el-date-picker ref="datetimePicker" :disabled="!switchValue" v-model="pickTime" type="datetimerange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="yyyy-MM-dd HH:mm:ss" @change="datetimePicked"></el-date-picker>
+                    </div>
+                </el-col>
+            </el-row>
+            <div>
+            </div>
+        </el-col>
+    </el-row>
     <vue-highcharts :options="options" ref="splineCharts" :highcharts="Highcharts"></vue-highcharts>
     <button @click="chartPrint">打印图表</button>
     <div>
-        <el-table ref="singleTable" :data="tableData" style="width: 67%" height="250" stripe highlight-current-row @current-change="handleCurrentChange">
+        <el-table ref="singleTable" :data="tableData" height="250" stripe highlight-current-row @current-change="handleCurrentChange">
             <el-table-column fixed align="center" prop="id" label="id" width="60"></el-table-column>
             <el-table-column prop="datetime" align="center" label="日期时间" width="250">
                 <template slot-scope="scope">
@@ -21,6 +43,11 @@
             <el-table-column prop="number_7ha" align="center" label="A相电流" width="120"></el-table-column>
             <el-table-column prop="number_7hb" align="center" label="B相电流" width="120"></el-table-column>
             <el-table-column prop="number_7hc" align="center" label="C相电流" width="120"></el-table-column>
+            <el-table-column prop="number_7j" align="center" label="尖电量" width="120"></el-table-column>
+            <el-table-column prop="number_7f" align="center" label="峰电量" width="120"></el-table-column>
+            <el-table-column prop="number_7p" align="center" label="平电量" width="120"></el-table-column>
+            <el-table-column prop="number_7z" align="center" label="总电量" width="120"></el-table-column>
+            <el-table-column prop="number_7g" align="center" label="谷电量" width="120"></el-table-column>
         </el-table>
     </div>
   </div>
@@ -54,6 +81,9 @@ export default {
             Highcharts,
             handle: null,
             tableData: [],
+            switchValue: false,
+            currentDateTimePicker: null,
+            pickTime: '',
             colors: {
                 'a': '#7cb5ec',
                 'b': '#434348',
@@ -91,6 +121,10 @@ export default {
                 chart: {
                     type: 'spline',
                     marginRight: 10,
+                },
+                credits: {
+                    href: 'http://flydowning.com',
+                    text: 'flyingdown.com'
                 },
                 title: {
                     text: '动态实时数据'
@@ -131,6 +165,48 @@ export default {
         }
     },
     methods: {
+        datetimePicked (val) {
+            console.log(val)
+            this.currentDateTimePicker = val
+            if (val === null) {
+                this.$refs.datetimePicker.focus()
+                this.$notify.error({
+                    title: '错误',
+                    message: '还没有选择时间范围'
+                })
+                return
+            }
+            let splineCharts = this.$refs.splineCharts,
+                chart = splineCharts.getChart()
+            splineCharts.delegateMethod('showLoading', 'Loading...')
+            getTransform({
+                'history': true,
+                'min_date': val[0],
+                'max_date': val[1]
+            }).then((value) => {
+                console.log(value)
+                splineCharts.removeSeries()
+
+                this.loadData(splineCharts, value)
+                splineCharts.hideLoading();
+                chart.redraw()
+                this.activeLastPointToolip(chart)
+            }).catch((err) => {
+                console.log(err)
+            })
+        },
+        switchChange (val) {
+            if (val) {
+                this.$notify.info({
+                    title: '提示',
+                    message: '关闭实时动态数据刷新'
+                })
+                clearTimeout(this.handle)
+                return
+            } else {
+                this.load()
+            }
+        },
         setCurrent (row) {
             this.$refs.singleTable.setCurrentRow(row)
         },
@@ -153,11 +229,12 @@ export default {
                     }
                     break
             }
-            if (this.$refs.splineCharts != null){
-                this.$refs.splineCharts.removeSeries()
-            }
             // console.log(this.transformInfo)
-            this.load()
+            if (this.switchValue) {
+                this.datetimePicked(this.currentDateTimePicker)
+            } else {
+                this.load()
+            }
         },
         addLastPoint(chart, index) {
             var series = chart.series,
@@ -201,68 +278,82 @@ export default {
             let points = chart.series[0].points;
             chart.tooltip.refresh(points[points.length -1]);
         },
+        loadData (splineCharts, value) {
+            if (value.data.count === 0) {
+                this.$notify({
+                    title: '警告',
+                    message: '所选时段数据为空',
+                    type: 'warning'
+                })
+                splineCharts.hideLoading()
+                return -1
+            }
+
+            let aData = [],
+                bData = [],
+                cData = [],
+                results = value['data']['results'],
+                index = results[0]['id']
+            this.tableData = results
+            // console.log(this.tableData)
+            for (let i in results) {
+                let label = this.transformInfo.label,
+                    x = results[i]['timestamp'],
+                    a = results[i]['number_' + label + 'ha'],
+                    b = results[i]['number_' + label + 'hb'],
+                    c = results[i]['number_' + label + 'hc']
+                aData.push([x, a])
+                bData.push([x, b])
+                cData.push([x, c])
+            }
+            for (let i in this.transformInfo.value) {
+                let preData = null
+                switch (this.transformInfo.value[i]) {
+                    case 'a':
+                        preData = {
+                            name: this.transformInfo.label + '号变压器' + '<br>a相电流',
+                            data: aData.reverse(),
+                            color: this.colors.a
+                        }
+                        splineCharts.addSeries(preData)
+                        break;
+                    case 'b':
+                        preData = {
+                            name: this.transformInfo.label + '号变压器' + '<br>b相电流',
+                            data: bData.reverse(),
+                            color: this.colors.b
+                        }
+                        splineCharts.addSeries(preData)
+                        break;
+                    case 'c':
+                        preData = {
+                            name: this.transformInfo.label + '号变压器' + '<br>c相电流',
+                            data: cData.reverse(),
+                            color: this.colors.c
+                        }
+                        splineCharts.addSeries(preData)
+                        break;
+                }
+            }
+            return index
+        },
         load () {
             if (this.handle) {
                 console.log(this.handle)
                 clearTimeout(this.handle)
             }
             let splineCharts = this.$refs.splineCharts,
-                chart = splineCharts.getChart(),
-                index
-            splineCharts.delegateMethod('showLoading', 'Loading...');
+                chart = splineCharts.getChart()
+
+            splineCharts.removeSeries()
+
+            splineCharts.delegateMethod('showLoading', 'Loading...')
             getTransform({'ordering':'-id'}).then((value) => {
-                let aData = [],
-                    bData = [],
-                    cData = [],
-                    results = value['data']['results']
-                this.tableData = results
-                // console.log(this.tableData)
-                index = results[0]['id']
-                for (let i in results) {
-                    let label = this.transformInfo.label,
-                        x = results[i]['timestamp'],
-                        a = results[i]['number_' + label + 'ha'],
-                        b = results[i]['number_' + label + 'hb'],
-                        c = results[i]['number_' + label + 'hc']
-                    aData.push([x, a])
-                    bData.push([x, b])
-                    cData.push([x, c])
-                }
-                for (let i in this.transformInfo.value) {
-                    let preData = null
-                    switch (this.transformInfo.value[i]) {
-                        case 'a':
-                            preData = {
-                                name: this.transformInfo.label + '号变压器' + '<br>a相电流',
-                                data: aData.reverse(),
-                                color: this.colors.a
-                            }
-                            splineCharts.addSeries(preData)
-                            break;
-                        case 'b':
-                            preData = {
-                                name: this.transformInfo.label + '号变压器' + '<br>b相电流',
-                                data: bData.reverse(),
-                                color: this.colors.b
-                            }
-                            splineCharts.addSeries(preData)
-                            break;
-                        case 'c':
-                            preData = {
-                                name: this.transformInfo.label + '号变压器' + '<br>c相电流',
-                                data: cData.reverse(),
-                                color: this.colors.c
-                            }
-                            splineCharts.addSeries(preData)
-                            break;
-                    }
-                }
+                let index = this.loadData(splineCharts, value)
                 splineCharts.hideLoading();
-                // console.log(chart.series)
                 chart.redraw()
                 this.activeLastPointToolip(chart)
-                // this.addLastPoint(chart, index+1)
-                setTimeout(this.addLastPoint, 1000 * 60, chart, index+1)
+                this.handle = setTimeout(this.addLastPoint, 1000 * 60, chart, index+1)
             }).catch((err) => {
                 console.log(err)
             })
@@ -283,5 +374,9 @@ export default {
   text-align: center;
   color: #2c3e50;
   margin-top: 60px;
+}
+
+.my-witch {
+    padding-top: 10px;
 }
 </style>

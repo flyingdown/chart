@@ -9,7 +9,7 @@ export const getTransform = params => {
         return axios.get(`${host}/transform/` + params.id)
     } else if ('ordering' in params) {
         return axios.get(`${host}/transform/?ordering=` + params.ordering)
-    } else {
-        return axios.get(`${host}/transform/`, params)
+    } else if ('history' in params) {
+        return axios.get(`${host}/transform/?min_date=` + params.min_date + '&max_date=' + params.max_date + '&page_size=1000&ordering=-id')
     }
 }
