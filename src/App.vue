@@ -120,7 +120,7 @@ export default {
             options: {
                 chart: {
                     type: 'spline',
-                    marginRight: 10,
+                    marginRight: 10
                 },
                 credits: {
                     href: 'http://flydowning.com',
@@ -187,6 +187,20 @@ export default {
                 console.log(value)
                 splineCharts.removeSeries()
 
+                chart.update({
+                    chart: {
+                        zoomType: 'x'
+                    },
+                    plotOptions: {
+                        series: {
+                            marker: {
+                                enabled: false
+                            },
+                            lineWidth: 1
+                        }
+                    }
+                })
+                console.log(chart)
                 this.loadData(splineCharts, value)
                 splineCharts.hideLoading();
                 chart.redraw()
@@ -345,6 +359,19 @@ export default {
             let splineCharts = this.$refs.splineCharts,
                 chart = splineCharts.getChart()
 
+            chart.update({
+                plotOptions: {
+                    chart: {
+                        zoomType: 'a'
+                    },
+                    series: {
+                        marker: {
+                            enabled: true
+                        },
+                        lineWidth: 2
+                    }
+                }
+            })
             splineCharts.removeSeries()
 
             splineCharts.delegateMethod('showLoading', 'Loading...')
